@@ -1,17 +1,61 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import manifest from 'manifest';
 import type {Store, Action} from 'redux';
 
 import type {GlobalState} from '@mattermost/types/store';
 
-import type {PluginRegistry} from 'types/mattermost-webapp';
+import {getConfig} from 'mattermost-redux/selectors/entities/general';
+
+import manifest from './manifest';
+import StatusComponent from './StatusComponent';
+import type {PluginRegistry} from './types/mattermost-webapp';
+
+export const getPluginServerRoute = (state: GlobalState) => {
+    const config = getConfig(state as any);
+
+    let basePath = '/';
+
+    if (config && config.SiteURL) {
+        basePath = new URL(config.SiteURL).pathname;
+
+        if (basePath && basePath[basePath.length - 1] === '/') {
+            basePath = basePath.substr(0, basePath.length - 1);
+        }
+    }
+
+    return basePath + '/plugins/' + manifest.id;
+};
+
+function getMyStatus(state: GlobalState) {
+    return new Promise((resolve, reject) => fetch(getPluginServerRoute(state) + '/api/v1/me').then((r) => r.json()).then(resolve).catch(reject));
+}
+
+export function getUserStatus(state: GlobalState, userId: string) {
+    return new Promise((resolve, reject) => fetch(getPluginServerRoute(state) + '/api/v1/status/' + userId).then((r) => r.json()).then(resolve).catch(reject));
+}
 
 export default class Plugin {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action<Record<string, unknown>>>) {
-        // @see https://developers.mattermost.com/extend/plugins/webapp/reference/
+        // Register the component that shows Spotify status on user profiles
+        registry.registerPopoverUserAttributesComponent(StatusComponent);
+
+        const state = store.getState();
+
+        // Calls the server /me plugin endpoint to cache my Spotify status
+        const updateState = () => {
+            getMyStatus(state).then(() => {
+                // Successfully updated backend cache
+            }).catch(() => {
+                // Silently fail if user hasn't connected Spotify
+            });
+        };
+
+        // Update backend cached status every 10 seconds
+        setInterval(updateState, 10 * 1000);
+
+        // Initial status update
+        updateState();
     }
 }
 

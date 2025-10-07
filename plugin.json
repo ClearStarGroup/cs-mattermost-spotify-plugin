@@ -1,6 +1,7 @@
 {
     "id": "com.clearstargroup.cs-mattermost-spotify-plugin",
     "name": "Clear Star Mattermost Spotify Plugin",
+    "version": "1.0.0",
     "description": "A plugin to show what users are listening to on Spotify in Mattermost.",
     "homepage_url": "https://github.com/clearstargroup/cs-mattermost-spotify-plugin",
     "support_url": "https://github.com/clearstargroup/cs-mattermost-spotify-plugin/issues",
@@ -19,8 +20,25 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "",
-        "footer": "",
-        "settings": []
+        "header": "Set your Spotify Developer settings",
+        "footer": "To get your Client ID and Client Secret, create an application at https://developer.spotify.com/dashboard",
+        "settings": [
+            {
+                "key": "ClientId",
+                "display_name": "Client ID",
+                "type": "text",
+                "help_text": "Client ID from your Spotify Application",
+                "placeholder": "Enter your Spotify Client ID",
+                "default": null
+            },
+            {
+                "key": "ClientSecret",
+                "display_name": "Client Secret",
+                "type": "text",
+                "help_text": "Client Secret from your Spotify Application",
+                "placeholder": "Enter your Spotify Client Secret",
+                "default": null
+            }
+        ]
     }
 }
