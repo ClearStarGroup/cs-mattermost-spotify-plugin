@@ -1,10 +1,10 @@
 {
-    "id": "com.mattermost.plugin-starter-template",
-    "name": "Plugin Starter Template",
-    "description": "This plugin serves as a starting point for writing a Mattermost plugin.",
-    "homepage_url": "https://github.com/mattermost/mattermost-plugin-starter-template",
-    "support_url": "https://github.com/mattermost/mattermost-plugin-starter-template/issues",
-    "icon_path": "assets/starter-template-icon.svg",
+    "id": "com.clearstargroup.cs-mattermost-spotify-plugin",
+    "name": "Clear Star Mattermost Spotify Plugin",
+    "description": "A plugin to show what users are listening to on Spotify in Mattermost.",
+    "homepage_url": "https://github.com/clearstargroup/cs-mattermost-spotify-plugin",
+    "support_url": "https://github.com/clearstargroup/cs-mattermost-spotify-plugin/issues",
+    "icon_path": "assets/clear-star-icon.svg",
     "min_server_version": "6.2.1",
     "server": {
         "executables": {
