@@ -3,7 +3,7 @@ import {connect} from 'react-redux';
 
 import type {GlobalState} from '@mattermost/types/store';
 
-import {getUserStatus} from './index';
+import {getUserStatus, type PlayerStatus} from './index';
 
 type Props = {
     state: GlobalState;
@@ -11,7 +11,7 @@ type Props = {
 
 type UserStatusCache = {
     [userId: string]: {
-        isPlaying: boolean;
+        status: PlayerStatus;
         lastChecked: number;
     };
 };
@@ -127,52 +127,42 @@ class UserMusicIndicator extends React.PureComponent<Props, {userStatusCache: Us
 
             // Skip if recently checked
             if (cached && (now - cached.lastChecked) < CACHE_DURATION) {
-                elements.forEach((element) => this.addIconToElement(element, cached.isPlaying));
+                elements.forEach((element) => this.addIconToElement(element, cached.status));
                 continue;
             }
 
-            try {
-                // eslint-disable-next-line no-await-in-loop
-                const status = await getUserStatus(this.props.state, userId);
-                if (!status) {
-                    throw new Error('Status not found');
-                }
+            // Get status
+            // eslint-disable-next-line no-await-in-loop
+            const status = await getUserStatus(this.props.state, userId).catch(() => ({
+                IsConnected: false,
+                IsPlaying: false,
+                PlaybackType: '',
+                PlaybackURL: '',
+                PlaybackName: '',
+            }));
 
-                const isPlaying = status.IsConnected && status.IsPlaying;
-
-                // Update cache
-                this.setState((prevState) => ({
-                    userStatusCache: {
-                        ...prevState.userStatusCache,
-                        [userId]: {
-                            isPlaying,
-                            lastChecked: now,
-                        },
+            // Update cache
+            this.setState((prevState) => ({
+                userStatusCache: {
+                    ...prevState.userStatusCache,
+                    [userId]: {
+                        status,
+                        lastChecked: now,
                     },
-                }));
+                },
+            }));
 
-                // Update elements
-                elements.forEach((element) => this.addIconToElement(element, isPlaying));
-            } catch (error) {
-                // User doesn't have Spotify connected or status not available
-                // Update cache to avoid repeated failed requests
-                this.setState((prevState) => ({
-                    userStatusCache: {
-                        ...prevState.userStatusCache,
-                        [userId]: {
-                            isPlaying: false,
-                            lastChecked: now,
-                        },
-                    },
-                }));
-                elements.forEach((element) => this.addIconToElement(element, false));
-            }
+            // Update elements
+            elements.forEach((element) => this.addIconToElement(element, status));
         }
     };
 
-    addIconToElement = (element: HTMLElement, isPlaying: boolean) => {
+    addIconToElement = (element: HTMLElement, status: PlayerStatus) => {
         // Check if we've already added an indicator to this element
         const existingIndicator = element.parentElement?.querySelector(':scope > .spotify-music-indicator');
+
+        const title = 'Listening to ' + status.PlaybackType + ' - ' + status.PlaybackName;
+        const isPlaying = status.IsConnected && status.IsPlaying;
 
         if (isPlaying && !existingIndicator) {
             // Add music indicator
@@ -180,12 +170,14 @@ class UserMusicIndicator extends React.PureComponent<Props, {userStatusCache: Us
             indicator.className = 'spotify-music-indicator';
             indicator.innerHTML = ' ♫';
             indicator.style.cssText = 'color: #1DB954; font-size: 14px; font-weight: bold;';
-            indicator.title = 'Listening to Spotify';
+            indicator.title = title;
 
             element.parentNode?.insertBefore(indicator, element.nextSibling);
         } else if (!isPlaying && existingIndicator) {
             // Remove indicator if user stopped playing
             existingIndicator.remove();
+        } else if (isPlaying && existingIndicator) {
+            (existingIndicator as HTMLSpanElement).title = title;
         }
     };
 
