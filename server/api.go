@@ -164,7 +164,6 @@ func (p *Plugin) fetchStatus(userID string) (*kvstore.Status, error) {
 
 	// Get token from KV store for the target user
 	tok, err := p.kvstore.GetToken(userID)
-	p.API.LogInfo("Got token for user", "userID", userID, "tok", tok, "err", err)
 	if err != nil {
 		return nil, errors.Wrap(err, "error reading token for user")
 	}
@@ -199,7 +198,7 @@ func (p *Plugin) fetchStatus(userID string) (*kvstore.Status, error) {
 
 	// Handle not playing state
 	if !status.Playing {
-		p.API.LogInfo("(FetchStatus) User has no token so not connected", "userID", userID)
+		p.API.LogInfo("Successfully fetched status - no token", "userID", userID)
 		return &kvstore.Status{IsConnected: false, IsPlaying: false}, nil
 	}
 

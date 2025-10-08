@@ -81,27 +81,19 @@ func (kv *Impl) StoreToken(userID string, token *oauth2.Token) error {
 
 // GetToken retrieves the OAuth token for a user
 func (kv *Impl) GetToken(userID string) (*oauth2.Token, error) {
-	kv.pluginAPI.LogInfo("Getting token for user", "userID", userID)
-
 	tokenJSON, err := kv.pluginAPI.KVGet("token-" + userID)
 	if err != nil || tokenJSON == nil {
 		return nil, errors.Wrap(err, "failed to get token")
 	}
 
-	kv.pluginAPI.LogInfo("Got token for user", "tokenJSON", string(tokenJSON), "len", len(tokenJSON), "isNil", tokenJSON == nil)
-
 	if len(tokenJSON) == 0 {
 		return nil, nil
 	}
-
-	kv.pluginAPI.LogInfo("Unmarshalling token for user", "tokenJSON", string(tokenJSON), "len", len(tokenJSON), "isNil", tokenJSON == nil)
 
 	var token oauth2.Token
 	if err := json.Unmarshal(tokenJSON, &token); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal token")
 	}
-
-	kv.pluginAPI.LogInfo("Unmarshalled token for user", "token", token)
 
 	return &token, nil
 }
