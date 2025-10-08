@@ -3,36 +3,32 @@ package kvstore
 import (
 	"encoding/json"
 
-	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
 
 // Impl implements the KVStore interface for Spotify plugin data
 type Impl struct {
-	client *pluginapi.Client
-	api    plugin.API
+	pluginAPI PluginAPI
 }
 
 // NewKVStore creates a new KVStore client
-func NewKVStore(client *pluginapi.Client, api plugin.API) KVStore {
+func NewKVStore(pluginAPI PluginAPI) (KVStore, error) {
 	return &Impl{
-		client: client,
-		api:    api,
-	}
+		pluginAPI: pluginAPI,
+	}, nil
 }
 
 // StoreUserEmail stores the bidirectional mapping between user ID and Spotify email
 func (kv *Impl) StoreUserEmail(userID, email string) error {
 	// Store email -> userID mapping
-	_, err := kv.client.KV.Set("email-"+email, []byte(userID))
+	err := kv.pluginAPI.KVSet("email-"+email, []byte(userID))
 	if err != nil {
 		return errors.Wrap(err, "failed to store email mapping")
 	}
 
 	// Store userID -> email mapping
-	_, err = kv.client.KV.Set("uid-"+userID, []byte(email))
+	err = kv.pluginAPI.KVSet("uid-"+userID, []byte(email))
 	if err != nil {
 		return errors.Wrap(err, "failed to store user ID mapping")
 	}
@@ -42,8 +38,7 @@ func (kv *Impl) StoreUserEmail(userID, email string) error {
 
 // GetUserIDByEmail retrieves the user ID associated with a Spotify email
 func (kv *Impl) GetUserIDByEmail(email string) (string, error) {
-	var userID []byte
-	err := kv.client.KV.Get("email-"+email, &userID)
+	userID, err := kv.pluginAPI.KVGet("email-" + email)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get user ID by email")
 	}
@@ -55,8 +50,7 @@ func (kv *Impl) GetUserIDByEmail(email string) (string, error) {
 
 // GetEmailByUserID retrieves the Spotify email associated with a user ID
 func (kv *Impl) GetEmailByUserID(userID string) (string, error) {
-	var email []byte
-	err := kv.client.KV.Get("uid-"+userID, &email)
+	email, err := kv.pluginAPI.KVGet("uid-" + userID)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get email by user ID")
 	}
@@ -77,7 +71,7 @@ func (kv *Impl) StoreToken(userID string, token *oauth2.Token) error {
 		return errors.Wrap(err, "failed to marshal token")
 	}
 
-	_, err = kv.client.KV.Set("token-"+userID, tokenJSON)
+	err = kv.pluginAPI.KVSet("token-"+userID, tokenJSON)
 	if err != nil {
 		return errors.Wrap(err, "failed to store token")
 	}
@@ -87,29 +81,40 @@ func (kv *Impl) StoreToken(userID string, token *oauth2.Token) error {
 
 // GetToken retrieves the OAuth token for a user
 func (kv *Impl) GetToken(userID string) (*oauth2.Token, error) {
-	var tokenJSON []byte
-	err := kv.client.KV.Get("token-"+userID, &tokenJSON)
-	if err != nil {
+	kv.pluginAPI.LogInfo("Getting token for user", "userID", userID)
+
+	tokenJSON, err := kv.pluginAPI.KVGet("token-" + userID)
+	if err != nil || tokenJSON == nil {
 		return nil, errors.Wrap(err, "failed to get token")
 	}
 
-	if tokenJSON == nil {
-		return nil, errors.New("no token found for user")
+	kv.pluginAPI.LogInfo("Got token for user", "tokenJSON", string(tokenJSON), "len", len(tokenJSON), "isNil", tokenJSON == nil)
+
+	if len(tokenJSON) == 0 {
+		return nil, nil
 	}
+
+	kv.pluginAPI.LogInfo("Unmarshalling token for user", "tokenJSON", string(tokenJSON), "len", len(tokenJSON), "isNil", tokenJSON == nil)
 
 	var token oauth2.Token
 	if err := json.Unmarshal(tokenJSON, &token); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal token")
 	}
 
+	kv.pluginAPI.LogInfo("Unmarshalled token for user", "token", token)
+
 	return &token, nil
 }
 
-// CacheStatus stores the Spotify player status for a user with 30-second expiration
-func (kv *Impl) CacheStatus(userID string, status *Status) error {
+// CacheStatus stores the Spotify player status for a user with configurable expiration
+func (kv *Impl) StoreCacheStatus(userID string, status *Status) error {
 	if status == nil {
 		// Delete cached status if nil
-		_ = kv.client.KV.Delete("cached-status-" + userID)
+		err := kv.pluginAPI.KVDelete("cached-status-" + userID)
+		if err != nil {
+			return errors.Wrap(err, "failed to delete cached status")
+		}
+
 		return nil
 	}
 
@@ -118,8 +123,12 @@ func (kv *Impl) CacheStatus(userID string, status *Status) error {
 		return errors.Wrap(err, "failed to marshal status")
 	}
 
-	// Set with 30-second expiration using the API directly
-	appErr := kv.api.KVSetWithExpiry("cached-status-"+userID, statusJSON, 30)
+	// Get cache duration from configuration
+	expirationMinutes := kv.pluginAPI.GetStatusCacheDurationMinutes()
+	expirationSeconds := int64(expirationMinutes * 60)
+
+	// Set with configurable expiration using the API directly
+	appErr := kv.pluginAPI.KVSet("cached-status-"+userID, statusJSON, expirationSeconds)
 	if appErr != nil {
 		return errors.Wrap(appErr, "failed to cache status")
 	}
@@ -129,14 +138,13 @@ func (kv *Impl) CacheStatus(userID string, status *Status) error {
 
 // GetCachedStatus retrieves the cached Spotify player status for a user
 func (kv *Impl) GetCachedStatus(userID string) (*Status, error) {
-	var statusJSON []byte
-	err := kv.client.KV.Get("cached-status-"+userID, &statusJSON)
-	if err != nil {
+	statusJSON, err := kv.pluginAPI.KVGet("cached-status-" + userID)
+	if err != nil || statusJSON == nil {
 		return nil, errors.Wrap(err, "failed to get cached status")
 	}
 
-	if statusJSON == nil {
-		return nil, errors.New("no cached status found for user")
+	if len(statusJSON) == 0 {
+		return nil, nil
 	}
 
 	var status Status
@@ -152,17 +160,17 @@ func (kv *Impl) ClearUserData(userID string) error {
 	// Get the email first so we can delete both mappings
 	email, err := kv.GetEmailByUserID(userID)
 	if err == nil && email != "" {
-		_ = kv.client.KV.Delete("email-" + email)
+		_ = kv.pluginAPI.KVDelete("email-" + email)
 	}
 
 	// Delete the user ID mapping
-	_ = kv.client.KV.Delete("uid-" + userID)
+	_ = kv.pluginAPI.KVDelete("uid-" + userID)
 
 	// Delete the OAuth token
-	_ = kv.client.KV.Delete("token-" + userID)
+	_ = kv.pluginAPI.KVDelete("token-" + userID)
 
 	// Delete the cached status
-	_ = kv.client.KV.Delete("cached-status-" + userID)
+	_ = kv.pluginAPI.KVDelete("cached-status-" + userID)
 
 	return nil
 }

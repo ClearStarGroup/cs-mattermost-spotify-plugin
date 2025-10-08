@@ -20,14 +20,14 @@ type UsernameToIdCache = {
     [username: string]: string;
 };
 
-class UserMusicIndicator extends React.PureComponent<Props, {cache: UserStatusCache; usernameCache: UsernameToIdCache}> {
+class UserMusicIndicator extends React.PureComponent<Props, {userStatusCache: UserStatusCache; usernameCache: UsernameToIdCache}> {
     private observer: MutationObserver | null = null;
     private checkInterval: NodeJS.Timeout | null = null;
 
     constructor(props: Props) {
         super(props);
         this.state = {
-            cache: {},
+            userStatusCache: {},
             usernameCache: {},
         };
     }
@@ -93,37 +93,37 @@ class UserMusicIndicator extends React.PureComponent<Props, {cache: UserStatusCa
     };
 
     updateMusicIcons = async () => {
-        console.log('updateMusicIcons');
-
         // Find all username buttons in posts
         const usernameButtons = document.querySelectorAll('button.user-popover');
         const userMap = new Map<string, HTMLElement[]>(); // userId -> elements
 
         // Extract usernames and look up user IDs
         for (const button of Array.from(usernameButtons)) {
-            const username = button.textContent?.trim().replace(/^@/, '');
+            const username = button.textContent?.trim();
             if (!username) {
                 continue;
             }
-            console.log('username', username);
 
             // eslint-disable-next-line no-await-in-loop
             const userId = await this.getUserIdFromUsername(username);
-            if (userId) {
-                if (!userMap.has(userId)) {
-                    userMap.set(userId, []);
-                }
-                userMap.get(userId)?.push(button as HTMLElement);
+            if (!userId) {
+                continue;
             }
-            console.log('userId', userId);
+
+            // Add to map
+            if (!userMap.has(userId)) {
+                userMap.set(userId, []);
+            }
+            userMap.get(userId)?.push(button as HTMLElement);
         }
 
         // Check status for each user (with caching)
         const now = Date.now();
         const CACHE_DURATION = 30000; // 30 seconds
 
+        // Iterate through user element map
         for (const [userId, elements] of userMap.entries()) {
-            const cached = this.state.cache[userId];
+            const cached = this.state.userStatusCache[userId];
 
             // Skip if recently checked
             if (cached && (now - cached.lastChecked) < CACHE_DURATION) {
@@ -134,12 +134,16 @@ class UserMusicIndicator extends React.PureComponent<Props, {cache: UserStatusCa
             try {
                 // eslint-disable-next-line no-await-in-loop
                 const status = await getUserStatus(this.props.state, userId);
-                const isPlaying = status && (status as any).IsPlaying;
+                if (!status) {
+                    throw new Error('Status not found');
+                }
+
+                const isPlaying = status.IsConnected && status.IsPlaying;
 
                 // Update cache
                 this.setState((prevState) => ({
-                    cache: {
-                        ...prevState.cache,
+                    userStatusCache: {
+                        ...prevState.userStatusCache,
                         [userId]: {
                             isPlaying,
                             lastChecked: now,
@@ -147,13 +151,14 @@ class UserMusicIndicator extends React.PureComponent<Props, {cache: UserStatusCa
                     },
                 }));
 
+                // Update elements
                 elements.forEach((element) => this.addIconToElement(element, isPlaying));
             } catch (error) {
                 // User doesn't have Spotify connected or status not available
                 // Update cache to avoid repeated failed requests
                 this.setState((prevState) => ({
-                    cache: {
-                        ...prevState.cache,
+                    userStatusCache: {
+                        ...prevState.userStatusCache,
                         [userId]: {
                             isPlaying: false,
                             lastChecked: now,
@@ -166,8 +171,6 @@ class UserMusicIndicator extends React.PureComponent<Props, {cache: UserStatusCa
     };
 
     addIconToElement = (element: HTMLElement, isPlaying: boolean) => {
-        console.log('addIconToElement', element, isPlaying);
-
         // Check if we've already added an indicator to this element
         const existingIndicator = element.parentElement?.querySelector(':scope > .spotify-music-indicator');
 

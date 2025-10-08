@@ -5,10 +5,19 @@ import (
 )
 
 type Status struct {
+	IsConnected  bool
 	IsPlaying    bool
 	PlaybackType string
 	PlaybackURL  string
 	PlaybackName string
+}
+
+type PluginAPI interface {
+	KVSet(key string, value []byte, expirationSeconds ...int64) error
+	KVGet(key string) ([]byte, error)
+	KVDelete(key string) error
+	GetStatusCacheDurationMinutes() int
+	LogInfo(message string, args ...any)
 }
 
 // KVStore defines the interface for Spotify plugin key-value storage operations
@@ -23,7 +32,7 @@ type KVStore interface {
 	GetToken(userID string) (*oauth2.Token, error)
 
 	// Status caching
-	CacheStatus(userID string, status *Status) error
+	StoreCacheStatus(userID string, status *Status) error
 	GetCachedStatus(userID string) (*Status, error)
 
 	// User data cleanup

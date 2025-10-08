@@ -3,18 +3,11 @@ import {connect} from 'react-redux';
 
 import type {GlobalState} from '@mattermost/types/store';
 
-import {getUserStatus} from './index';
+import {getUserStatus, type PlayerStatus} from './index';
 
 type Props = {
     state?: GlobalState;
     UID?: string;
-};
-
-type PlayerStatus = {
-    IsPlaying: boolean;
-    PlaybackType: string;
-    PlaybackURL: string;
-    PlaybackName: string;
 };
 
 class SpotifyInfo extends React.PureComponent<Props, {status: PlayerStatus | null}> {
@@ -30,12 +23,13 @@ class SpotifyInfo extends React.PureComponent<Props, {status: PlayerStatus | nul
                 this.setState({status: data as PlayerStatus});
             }).catch(() => {
                 // Silently fail if user hasn't connected Spotify or status not cached
+                console.error('Failed to fetch status for user', this.props.UID);
             });
         }
     }
 
     render() {
-        if (!this.state.status) {
+        if (!this.state.status || !this.state.status.IsConnected) {
             return (<span>{'Spotify: Not connected'}</span>);
         }
         if (!this.state.status.IsPlaying) {

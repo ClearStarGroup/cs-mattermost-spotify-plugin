@@ -19,8 +19,9 @@ import (
 // If you add non-reference types to your Configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type Configuration struct {
-	ClientID     string
-	ClientSecret string
+	ClientID                   string
+	ClientSecret               string
+	StatusCacheDurationMinutes int
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -85,4 +86,15 @@ func (p *Plugin) OnConfigurationChange() error {
 	p.setConfiguration(configuration)
 
 	return nil
+}
+
+// KVStore Plugin API - gets the configured cache duration
+func (p *Plugin) GetStatusCacheDurationMinutes() int {
+	p.configurationLock.RLock()
+	defer p.configurationLock.RUnlock()
+
+	if p.configuration.StatusCacheDurationMinutes <= 0 {
+		return 15 // Default to 15 minutes
+	}
+	return p.configuration.StatusCacheDurationMinutes
 }

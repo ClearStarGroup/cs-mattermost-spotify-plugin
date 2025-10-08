@@ -12,7 +12,16 @@ import StatusComponent from './StatusComponent';
 import type {PluginRegistry} from './types/mattermost-webapp';
 import UserMusicIndicator from './UserMusicIndicator';
 
+export type PlayerStatus = {
+    IsConnected: boolean;
+    IsPlaying: boolean;
+    PlaybackType: string;
+    PlaybackURL: string;
+    PlaybackName: string;
+};
+
 export const getPluginServerRoute = (state: GlobalState) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const config = getConfig(state as any);
 
     let basePath = '/';
@@ -28,38 +37,18 @@ export const getPluginServerRoute = (state: GlobalState) => {
     return basePath + '/plugins/' + manifest.id;
 };
 
-function getMyStatus(state: GlobalState) {
-    return new Promise((resolve, reject) => fetch(getPluginServerRoute(state) + '/api/v1/me').then((r) => r.json()).then(resolve).catch(reject));
-}
-
-export function getUserStatus(state: GlobalState, userId: string) {
+export function getUserStatus(state: GlobalState, userId: string): Promise<PlayerStatus> {
     return new Promise((resolve, reject) => fetch(getPluginServerRoute(state) + '/api/v1/status/' + userId).then((r) => r.json()).then(resolve).catch(reject));
 }
 
 export default class Plugin {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action<Record<string, unknown>>>) {
         // Register the component that shows Spotify status on user profiles
         registry.registerPopoverUserAttributesComponent(StatusComponent);
 
         // Register the component that shows music icons next to usernames
         registry.registerGlobalComponent(UserMusicIndicator);
-
-        const state = store.getState();
-
-        // Calls the server /me plugin endpoint to cache my Spotify status
-        const updateState = () => {
-            getMyStatus(state).then(() => {
-                // Successfully updated backend cache
-            }).catch(() => {
-                // Silently fail if user hasn't connected Spotify
-            });
-        };
-
-        // Update backend cached status every 10 seconds
-        setInterval(updateState, 10 * 1000);
-
-        // Initial status update
-        updateState();
     }
 }
 

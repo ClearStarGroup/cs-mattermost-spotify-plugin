@@ -5,39 +5,20 @@ import (
 	"strings"
 
 	"github.com/mattermost/mattermost/server/public/model"
-	"github.com/mattermost/mattermost/server/public/pluginapi"
 )
 
 // Impl implements the Command interface
 type Impl struct {
-	client    *pluginapi.Client
 	pluginAPI PluginAPI
 }
 
 const spotifyCommandTrigger = "spotify"
 
 // NewCommand creates a new Command handler and registers slash commands
-func NewCommand(client *pluginapi.Client, pluginAPI PluginAPI) Command {
-	autocompleteData := getAutocompleteData()
-	err := client.SlashCommand.Register(&model.Command{
-		Trigger:          spotifyCommandTrigger,
-		AutoComplete:     true,
-		AutoCompleteDesc: "Spotify integration",
-		AutoCompleteHint: "(enable|disable)",
-		AutocompleteData: autocompleteData,
-	})
-	if err != nil {
-		client.Log.Error("Failed to register command", "error", err)
-	}
-	return &Impl{
-		client:    client,
-		pluginAPI: pluginAPI,
-	}
-}
-
-func getAutocompleteData() *model.AutocompleteData {
-	command := model.NewAutocompleteData("spotify", "", "Enables or disables Spotify integration.")
-	command.AddStaticListArgument("", true, []model.AutocompleteListItem{
+func NewCommand(pluginAPI PluginAPI) (Command, error) {
+	// Autocomplete data
+	autocompleteData := model.NewAutocompleteData("spotify", "", "Enables or disables Spotify integration.")
+	autocompleteData.AddStaticListArgument("", true, []model.AutocompleteListItem{
 		{
 			Item:     "enable",
 			HelpText: "Enable Spotify integration",
@@ -48,7 +29,18 @@ func getAutocompleteData() *model.AutocompleteData {
 		},
 	})
 
-	return command
+	// Register command
+	err := pluginAPI.RegisterCommand(&model.Command{
+		Trigger:          spotifyCommandTrigger,
+		AutoComplete:     true,
+		AutoCompleteDesc: "Spotify integration",
+		AutoCompleteHint: "(enable|disable)",
+		AutocompleteData: autocompleteData,
+	})
+
+	return &Impl{
+		pluginAPI: pluginAPI,
+	}, err
 }
 
 // Handle executes the commands that were registered in the NewCommandHandler function
