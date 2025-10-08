@@ -147,6 +147,34 @@ func (kv *Impl) GetCachedStatus(userID string) (*Status, error) {
 	return &status, nil
 }
 
+// StoreContextName stores the name for a Spotify context (artist, playlist, album, show) indefinitely
+func (kv *Impl) StoreContextName(contextType, contextID, name string) error {
+	if name == "" {
+		return errors.New("cannot store empty context name")
+	}
+
+	err := kv.pluginAPI.KVSet("context-"+contextType+"-"+contextID, []byte(name))
+	if err != nil {
+		return errors.Wrap(err, "failed to store context name")
+	}
+
+	return nil
+}
+
+// GetContextName retrieves the cached name for a Spotify context
+func (kv *Impl) GetContextName(contextType, contextID string) (string, error) {
+	nameBytes, err := kv.pluginAPI.KVGet("context-" + contextType + "-" + contextID)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get context name")
+	}
+
+	if len(nameBytes) == 0 {
+		return "", nil
+	}
+
+	return string(nameBytes), nil
+}
+
 // ClearUserData removes all data associated with a user (mappings, token, and cached status)
 func (kv *Impl) ClearUserData(userID string) error {
 	// Get the email first so we can delete both mappings

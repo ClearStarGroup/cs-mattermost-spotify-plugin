@@ -35,6 +35,10 @@ type KVStore interface {
 	StoreCacheStatus(userID string, status *Status) error
 	GetCachedStatus(userID string) (*Status, error)
 
+	// Context caching (artist, playlist, album, show names)
+	StoreContextName(contextType, contextID, name string) error
+	GetContextName(contextType, contextID string) (string, error)
+
 	// User data cleanup
 	ClearUserData(userID string) error
 }

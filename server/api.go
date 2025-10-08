@@ -206,48 +206,68 @@ func (p *Plugin) fetchStatus(userID string) (*kvstore.Status, error) {
 	var contextName string
 	var ID = spotify.ID(strings.Split(string(status.PlaybackContext.URI), ":")[2])
 
-	switch status.PlaybackContext.Type {
-	case "artist":
-		artist, err := client.GetArtist(ctx, ID)
-		if err != nil || artist == nil {
-			return nil, errors.Wrap(err, "failed to get artist")
-		}
-		contextName = artist.Name
-	case "playlist":
-		playlist, err := client.GetPlaylist(ctx, ID)
-		switch {
-		case err != nil && err.Error() == "Resource not found" && status.PlaybackContext.ExternalURLs["spotify"] != "":
-			var resp *http.Response
-			resp, err = http.Get(status.PlaybackContext.ExternalURLs["spotify"])
-			if err == nil && resp != nil {
-				defer resp.Body.Close()
-				var body []byte
-				body, err = io.ReadAll(resp.Body)
-				if err == nil {
-					titleStart := strings.Index(string(body), "<title>")
-					titleEnd := strings.Index(string(body), "</title>")
-					if titleStart >= 0 && titleEnd > titleStart {
-						contextName = strings.TrimSuffix(string(body[titleStart+7:titleEnd]), " | Spotify Playlist")
+	// Try to get cached context name first
+	contextName, err = p.kvstore.GetContextName(status.PlaybackContext.Type, string(ID))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get cached context name")
+	}
+
+	// If not in cache, fetch from Spotify API
+	if contextName == "" {
+		// Cache miss - fetch from Spotify API
+		switch status.PlaybackContext.Type {
+		case "artist":
+			artist, err := client.GetArtist(ctx, ID)
+			if err != nil || artist == nil {
+				return nil, errors.Wrap(err, "failed to get artist")
+			}
+			contextName = artist.Name
+		case "playlist":
+			playlist, err := client.GetPlaylist(ctx, ID)
+			switch {
+			case err != nil && err.Error() == "Resource not found" && status.PlaybackContext.ExternalURLs["spotify"] != "":
+				var resp *http.Response
+				resp, err = http.Get(status.PlaybackContext.ExternalURLs["spotify"])
+				if err == nil && resp != nil {
+					defer resp.Body.Close()
+					var body []byte
+					body, err = io.ReadAll(resp.Body)
+					if err == nil {
+						titleStart := strings.Index(string(body), "<title>")
+						titleEnd := strings.Index(string(body), "</title>")
+						if titleStart >= 0 && titleEnd > titleStart {
+							contextName = strings.TrimSuffix(string(body[titleStart+7:titleEnd]), " | Spotify Playlist")
+						}
 					}
 				}
+			case err != nil || playlist == nil:
+				return nil, errors.Wrap(err, "failed to get playlist")
+			default:
+				contextName = playlist.Name
 			}
-		case err != nil || playlist == nil:
-			return nil, errors.Wrap(err, "failed to get playlist")
-		default:
-			contextName = playlist.Name
+		case "album":
+			album, err := client.GetAlbum(ctx, ID)
+			if err != nil || album == nil {
+				return nil, errors.Wrap(err, "failed to get album")
+			}
+			contextName = album.Name + " - " + album.Artists[0].Name
+		case "show":
+			show, err := client.GetShow(ctx, ID)
+			if err != nil || show == nil {
+				return nil, errors.Wrap(err, "failed to get show")
+			}
+			contextName = show.Name
 		}
-	case "album":
-		album, err := client.GetAlbum(ctx, ID)
-		if err != nil || album == nil {
-			return nil, errors.Wrap(err, "failed to get album")
+
+		// Cache the fetched context name for future use
+		if contextName != "" {
+			if err := p.kvstore.StoreContextName(status.PlaybackContext.Type, string(ID), contextName); err != nil {
+				p.API.LogError("Failed to cache context name", "type", status.PlaybackContext.Type, "id", ID, "error", err)
+				// Don't return error - just log it and continue
+			}
 		}
-		contextName = album.Name + " - " + album.Artists[0].Name
-	case "show":
-		show, err := client.GetShow(ctx, ID)
-		if err != nil || show == nil {
-			return nil, errors.Wrap(err, "failed to get show")
-		}
-		contextName = show.Name
+
+		p.API.LogInfo("Successfully fetched context name", "type", status.PlaybackContext.Type, "id", ID, "name", contextName)
 	}
 
 	// Create the status result
