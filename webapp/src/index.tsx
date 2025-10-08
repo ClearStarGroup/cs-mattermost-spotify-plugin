@@ -10,6 +10,7 @@ import {getConfig} from 'mattermost-redux/selectors/entities/general';
 import manifest from './manifest';
 import StatusComponent from './StatusComponent';
 import type {PluginRegistry} from './types/mattermost-webapp';
+import UserMusicIndicator from './UserMusicIndicator';
 
 export const getPluginServerRoute = (state: GlobalState) => {
     const config = getConfig(state as any);
@@ -39,6 +40,9 @@ export default class Plugin {
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action<Record<string, unknown>>>) {
         // Register the component that shows Spotify status on user profiles
         registry.registerPopoverUserAttributesComponent(StatusComponent);
+
+        // Register the component that shows music icons next to usernames
+        registry.registerGlobalComponent(UserMusicIndicator);
 
         const state = store.getState();
 
