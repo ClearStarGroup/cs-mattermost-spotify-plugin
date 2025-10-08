@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/clearstargroup/cs-mattermost-spotify-plugin/server/store/kvstore"
 	"github.com/gorilla/mux"
 	"github.com/mattermost/mattermost/server/public/plugin"
-	"github.com/zmb3/spotify"
+	"github.com/zmb3/spotify/v2"
 )
 
 // MatterMost plugin hook - invoked when an HTTP request is received.
@@ -52,15 +56,17 @@ func (p *Plugin) handleSpotifyCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tok, err := p.auth.Token("123", r)
+	ctx := context.Background()
+	tok, err := p.auth.Token(ctx, "123", r)
 	if err != nil {
 		http.Error(w, "Couldn't get token", http.StatusForbidden)
 		p.API.LogError("Failed to get token", "error", err)
 		return
 	}
 
-	cli := p.auth.NewClient(tok)
-	cu, err := cli.CurrentUser()
+	httpClient := p.auth.Client(ctx, tok)
+	cli := spotify.New(httpClient)
+	cu, err := cli.CurrentUser(ctx)
 	if err != nil {
 		http.Error(w, "Couldn't get user", http.StatusForbidden)
 		p.API.LogError("Failed to get current user", "error", err)
@@ -98,8 +104,6 @@ func (p *Plugin) handleSpotifyCallback(w http.ResponseWriter, r *http.Request) {
 
 // handleMe returns the current user's Spotify player status and caches it
 func (p *Plugin) handleMe(w http.ResponseWriter, r *http.Request) {
-	p.API.LogInfo("handleMe", "userID", r.Header.Get("Mattermost-User-ID"))
-
 	userID := r.Header.Get("Mattermost-User-ID")
 	if userID == "" {
 		p.API.LogError("Invalid user", "userID", userID)
@@ -108,31 +112,104 @@ func (p *Plugin) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch using user's own token
-	p.handleSpotify(w, r, userID, func(client *spotify.Client) (interface{}, error) {
-		status, err := client.PlayerState()
-		p.API.LogInfo("handleMe", "status", status, "error", err)
-		if err == nil && status != nil {
-			// Cache the status for others to view (fire and forget)
-			go func() {
-				if err2 := p.kvstore.CacheStatus(userID, status); err2 != nil {
-					p.API.LogError("Failed to cache status", "error", err2)
-				}
-			}()
+	p.handleSpotify(w, r, userID, func(ctx context.Context, client *spotify.Client) (interface{}, error) {
+		status, err := client.PlayerState(ctx)
+		if status == nil || err != nil {
+			p.API.LogError("Failed to get status", "error", err)
+			if cacheErr := p.kvstore.CacheStatus(userID, nil); cacheErr != nil {
+				p.API.LogError("Failed to cache nil status", "error", cacheErr)
+				return nil, cacheErr
+			}
+			return nil, err
 		}
-		return status, err
+
+		if !status.Playing {
+			if cacheErr := p.kvstore.CacheStatus(userID, &kvstore.Status{IsPlaying: false}); cacheErr != nil {
+				p.API.LogError("Failed to cache nil status", "error", cacheErr)
+				return nil, cacheErr
+			}
+			return nil, nil
+		}
+
+		// Get additional context info based on what's currently playing
+		var contextName string
+		var ID = spotify.ID(strings.Split(string(status.PlaybackContext.URI), ":")[2])
+
+		switch status.PlaybackContext.Type {
+		case "artist":
+			var artist *spotify.FullArtist
+			artist, err = client.GetArtist(ctx, ID)
+			if err == nil && artist != nil {
+				contextName = artist.Name
+			}
+		case "playlist":
+			var playlist *spotify.FullPlaylist
+			playlist, err = client.GetPlaylist(ctx, ID)
+			if err == nil && playlist != nil {
+				contextName = playlist.Name
+			}
+			if err != nil && err.Error() == "Resource not found" && status.PlaybackContext.ExternalURLs["spotify"] != "" {
+				var resp *http.Response
+				resp, err = http.Get(status.PlaybackContext.ExternalURLs["spotify"])
+				if err == nil && resp != nil {
+					defer resp.Body.Close()
+					var body []byte
+					body, err = io.ReadAll(resp.Body)
+					if err == nil {
+						titleStart := strings.Index(string(body), "<title>")
+						titleEnd := strings.Index(string(body), "</title>")
+						if titleStart >= 0 && titleEnd > titleStart {
+							contextName = strings.TrimSuffix(string(body[titleStart+7:titleEnd]), " | Spotify Playlist")
+						}
+					}
+				}
+			}
+		case "album":
+			var album *spotify.FullAlbum
+			album, err = client.GetAlbum(ctx, ID)
+			if err == nil && album != nil {
+				contextName = album.Name + " - " + album.Artists[0].Name
+			}
+		case "show":
+			var show *spotify.FullShow
+			show, err = client.GetShow(ctx, ID)
+			if err == nil && show != nil {
+				contextName = show.Name
+			}
+		}
+
+		if contextName == "" || err != nil {
+			p.API.LogError("Failed to get context info", "error", err)
+			if cacheErr := p.kvstore.CacheStatus(userID, nil); cacheErr != nil {
+				p.API.LogError("Failed to cache nil status", "error", cacheErr)
+			}
+			return nil, err
+		}
+
+		// Calculate the status string
+		result := kvstore.Status{
+			IsPlaying:    true,
+			PlaybackType: strings.ToUpper(string(status.PlaybackContext.Type[0])) + status.PlaybackContext.Type[1:],
+			PlaybackURL:  status.PlaybackContext.ExternalURLs["spotify"],
+			PlaybackName: contextName,
+		}
+
+		// Cache the status for others to view (fire and forget)
+		if cacheErr := p.kvstore.CacheStatus(userID, &result); cacheErr != nil {
+			p.API.LogError("Failed to cache status", "error", cacheErr)
+			return nil, cacheErr
+		}
+
+		return nil, nil
 	})
 }
 
 // handleStatus returns the cached Spotify player status for any user
 func (p *Plugin) handleStatus(w http.ResponseWriter, r *http.Request) {
-	p.API.LogInfo("handleStatus", "userID", r.Header.Get("Mattermost-User-ID"), "userId", mux.Vars(r)["userId"])
-
-	vars := mux.Vars(r)
-	userID := vars["userId"]
-
+	userID := r.Header.Get("Mattermost-User-ID")
 	if userID == "" {
 		p.API.LogError("Invalid user", "userID", userID)
-		http.Error(w, "invalid url", http.StatusBadRequest)
+		http.Error(w, "invalid user", http.StatusBadRequest)
 		return
 	}
 
@@ -143,7 +220,6 @@ func (p *Plugin) handleStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no status available", http.StatusNotFound)
 		return
 	}
-	p.API.LogInfo("handleStatus", "status", status)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -153,11 +229,13 @@ func (p *Plugin) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSpotify is a helper function that handles Spotify API calls with token management
-func (p *Plugin) handleSpotify(w http.ResponseWriter, _ *http.Request, userID string, clientCode func(client *spotify.Client) (interface{}, error)) {
+func (p *Plugin) handleSpotify(w http.ResponseWriter, _ *http.Request, userID string, clientCode func(ctx context.Context, client *spotify.Client) (interface{}, error)) {
 	if p.auth == nil {
 		http.Error(w, "Spotify not configured", http.StatusInternalServerError)
 		return
 	}
+
+	ctx := context.Background()
 
 	// Get token from KV store
 	tok, err := p.kvstore.GetToken(userID)
@@ -166,12 +244,11 @@ func (p *Plugin) handleSpotify(w http.ResponseWriter, _ *http.Request, userID st
 		return
 	}
 
-	client := p.auth.NewClient(tok)
-
 	// Refresh token if it's expiring soon (within 5m30s)
 	if m, _ := time.ParseDuration("5m30s"); time.Until(tok.Expiry) < m {
-		newToken, tokenErr := client.Token()
-		if tokenErr == nil {
+		newToken, tokenErr := p.auth.RefreshToken(ctx, tok)
+		if tokenErr == nil && newToken != nil {
+			tok = newToken
 			// Store refreshed token
 			if err2 := p.kvstore.StoreToken(userID, newToken); err2 != nil {
 				p.API.LogError("Failed to store refreshed token", "error", err2)
@@ -179,7 +256,10 @@ func (p *Plugin) handleSpotify(w http.ResponseWriter, _ *http.Request, userID st
 		}
 	}
 
-	ps, err := clientCode(&client)
+	httpClient := p.auth.Client(ctx, tok)
+	client := spotify.New(httpClient)
+
+	ps, err := clientCode(ctx, client)
 	if err != nil {
 		http.Error(w, "cannot perform spotify commands: "+err.Error(), http.StatusBadRequest)
 		return

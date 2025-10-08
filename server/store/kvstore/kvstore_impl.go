@@ -6,7 +6,6 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
-	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 )
 
@@ -107,7 +106,7 @@ func (kv *Impl) GetToken(userID string) (*oauth2.Token, error) {
 }
 
 // CacheStatus stores the Spotify player status for a user with 30-second expiration
-func (kv *Impl) CacheStatus(userID string, status *spotify.PlayerState) error {
+func (kv *Impl) CacheStatus(userID string, status *Status) error {
 	if status == nil {
 		// Delete cached status if nil
 		_ = kv.client.KV.Delete("cached-status-" + userID)
@@ -129,7 +128,7 @@ func (kv *Impl) CacheStatus(userID string, status *spotify.PlayerState) error {
 }
 
 // GetCachedStatus retrieves the cached Spotify player status for a user
-func (kv *Impl) GetCachedStatus(userID string) (*spotify.PlayerState, error) {
+func (kv *Impl) GetCachedStatus(userID string) (*Status, error) {
 	var statusJSON []byte
 	err := kv.client.KV.Get("cached-status-"+userID, &statusJSON)
 	if err != nil {
@@ -140,7 +139,7 @@ func (kv *Impl) GetCachedStatus(userID string) (*spotify.PlayerState, error) {
 		return nil, errors.New("no cached status found for user")
 	}
 
-	var status spotify.PlayerState
+	var status Status
 	if err := json.Unmarshal(statusJSON, &status); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal status")
 	}

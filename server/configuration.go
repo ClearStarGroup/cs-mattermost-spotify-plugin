@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	"github.com/pkg/errors"
-	"github.com/zmb3/spotify"
+	spotifyauth "github.com/zmb3/spotify/v2/auth"
 )
 
 // Configuration captures the plugin's external Configuration as exposed in the Mattermost server
@@ -58,14 +58,16 @@ func (p *Plugin) setConfiguration(configuration *Configuration) {
 	if configuration != nil && configuration.ClientID != "" && configuration.ClientSecret != "" {
 		siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
 		callbackURL := siteURL + "/plugins/com.clearstargroup.cs-mattermost-spotify-plugin/callback"
-		auth := spotify.NewAuthenticator(
-			callbackURL,
-			spotify.ScopeUserReadPrivate,
-			spotify.ScopeUserReadEmail,
-			spotify.ScopeUserReadPlaybackState,
+		p.auth = spotifyauth.New(
+			spotifyauth.WithRedirectURL(callbackURL),
+			spotifyauth.WithScopes(
+				spotifyauth.ScopeUserReadPrivate,
+				spotifyauth.ScopeUserReadEmail,
+				spotifyauth.ScopeUserReadPlaybackState,
+			),
+			spotifyauth.WithClientID(configuration.ClientID),
+			spotifyauth.WithClientSecret(configuration.ClientSecret),
 		)
-		auth.SetAuthInfo(configuration.ClientID, configuration.ClientSecret)
-		p.auth = &auth
 	}
 
 	p.configuration = configuration

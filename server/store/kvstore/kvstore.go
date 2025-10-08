@@ -1,9 +1,15 @@
 package kvstore
 
 import (
-	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 )
+
+type Status struct {
+	IsPlaying    bool
+	PlaybackType string
+	PlaybackURL  string
+	PlaybackName string
+}
 
 // KVStore defines the interface for Spotify plugin key-value storage operations
 type KVStore interface {
@@ -17,8 +23,8 @@ type KVStore interface {
 	GetToken(userID string) (*oauth2.Token, error)
 
 	// Status caching
-	CacheStatus(userID string, status *spotify.PlayerState) error
-	GetCachedStatus(userID string) (*spotify.PlayerState, error)
+	CacheStatus(userID string, status *Status) error
+	GetCachedStatus(userID string) (*Status, error)
 
 	// User data cleanup
 	ClearUserData(userID string) error

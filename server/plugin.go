@@ -10,7 +10,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
-	"github.com/zmb3/spotify"
+	spotifyauth "github.com/zmb3/spotify/v2/auth"
 )
 
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
@@ -27,7 +27,7 @@ type Plugin struct {
 	command command.Command
 
 	// auth is the Spotify authenticator (initialized in setConfiguration after configuration is loaded)
-	auth *spotify.Authenticator
+	auth *spotifyauth.Authenticator
 
 	// configurationLock synchronizes access to the configuration.
 	configurationLock sync.RWMutex
@@ -70,7 +70,7 @@ func (p *Plugin) GetSpotifyAuthURL() (string, error) {
 	if p.auth == nil {
 		return "", errors.New("Spotify not configured")
 	}
-	url := p.auth.AuthURLWithOpts("123")
+	url := p.auth.AuthURL("123")
 	return url, nil
 }
 
