@@ -94,7 +94,7 @@ func (c *Impl) executeSpotifyCommand(args *model.CommandArgs) (*model.CommandRes
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
 			GotoLocation: url,
-			Text:         "Click the link above to authorize Spotify!",
+			Text:         "Complete the authorization process in the new window to authorize with Spotify!",
 		}, nil
 
 	case "disable":

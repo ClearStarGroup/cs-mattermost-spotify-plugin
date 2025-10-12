@@ -23,7 +23,6 @@ class SpotifyInfo extends React.PureComponent<Props, {status: PlayerStatus | nul
                 this.setState({status: data as PlayerStatus});
             }).catch(() => {
                 // Silently fail if user hasn't connected Spotify or status not cached
-                console.error('Failed to fetch status for user', this.props.UID);
             });
         }
     }

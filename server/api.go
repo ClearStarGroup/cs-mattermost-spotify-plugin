@@ -97,6 +97,13 @@ func (p *Plugin) handleSpotifyCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear the users status cache
+	if err := p.kvstore.StoreCacheStatus(userID, nil); err != nil {
+		p.API.LogError("Failed to clear cached status", "error", err)
+		http.Error(w, "failed to clear cached status", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("Successfully connected to Spotify! You can close this window.")); err != nil {
 		p.API.LogError("Failed to write response", "error", err)
@@ -109,7 +116,7 @@ func (p *Plugin) handleSpotifyCallback(w http.ResponseWriter, r *http.Request) {
 
 // handleStatus returns the Spotify player status for any user, fetching and caching if necessary
 func (p *Plugin) handleStatus(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-ID")
+	userID := mux.Vars(r)["userId"]
 	if userID == "" {
 		p.API.LogError("Invalid requesting user", "userID", userID)
 		http.Error(w, "invalid user", http.StatusBadRequest)
@@ -199,7 +206,7 @@ func (p *Plugin) fetchStatus(userID string) (*kvstore.Status, error) {
 	// Handle not playing state
 	if !status.Playing {
 		p.API.LogInfo("Successfully fetched status - no token", "userID", userID)
-		return &kvstore.Status{IsConnected: false, IsPlaying: false}, nil
+		return &kvstore.Status{IsConnected: true, IsPlaying: false}, nil
 	}
 
 	// Get additional context info based on what's currently playing
