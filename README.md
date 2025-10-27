@@ -1,223 +1,187 @@
-# Plugin Starter Template
+# Clear Star Mattermost Spotify Plugin
 
-[![Build Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml)
-[![E2E Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml)
+A Mattermost plugin that integrates with Spotify to display users' currently playing music on their Mattermost profile. Originally forked from [reflog/mattermost-spotify](https://github.com/reflog/mattermost-spotify), this plugin has been completely rewritten on top of the [Mattermost plugin starter template](https://github.com/mattermost/mattermost-plugin-starter-template).
 
-This plugin serves as a starting point for writing a Mattermost plugin. Feel free to base your own plugin off this repository.
+[![Build Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml)
 
-To learn more about plugins, see [our plugin documentation](https://developers.mattermost.com/extend/plugins/).
+## Overview
 
-This template requires node v16 and npm v8. You can download and install nvm to manage your node versions by following the instructions [here](https://github.com/nvm-sh/nvm). Once you've setup the project simply run `nvm i` within the root folder to use the suggested version of node.
+This plugin enables Mattermost users to share their Spotify listening activity with their teammates. When a user has the plugin enabled and is playing music on Spotify, their current track information appears in their Mattermost profile popover and as a music icon next to their username in posts.
 
-## Getting Started
-Use GitHub's template feature to make a copy of this repository by clicking the "Use this template" button.
+### Features
 
-Alternatively shallow clone the repository matching your plugin name:
-```
-git clone --depth 1 https://github.com/mattermost/mattermost-plugin-starter-template com.example.my-plugin
-```
+- Spotify OAuth authentication
+- Automatic status caching (configurable TTL, defaulting to 15 mins)
+- Status displayed in user profile popover
+- Music icons (♫) next to usernames in posts when actively playing
+- Supports all Spotify playback types (playlist, album, artist, show)
 
-Note that this project uses [Go modules](https://github.com/golang/go/wiki/Modules). Be sure to locate the project outside of `$GOPATH`.
+### How It Works
 
-Edit the following files:
-1. `plugin.json` with your `id`, `name`, and `description`:
-```json
-{
-    "id": "com.example.my-plugin",
-    "name": "My Plugin",
-    "description": "A plugin to enhance Mattermost."
-}
-```
+1. User runs `/spotify enable their@spotify.email.com` command
+2. Redirected to Spotify for OAuth authorization
+3. Returns to Mattermost with connected Spotify account
+4. User profile cards include what they're listerning to
+5. Music icon is show next to usernames if they're listening to Spotify
 
-2. `go.mod` with your Go module path, following the `<hosting-site>/<repository>/<module>` convention:
-```
-module github.com/example/my-plugin
-```
+## Installation
 
-3. Replace all occurrences of `github.com/mattermost/mattermost-plugin-starter-template` in the codebase with your Go module path:
+### Prerequisites
+
+- Mattermost server v7.0 or later
+- Node.js v16+ and npm v8+
+- Go 1.19 or later
+
+### Building the Plugin
+
 ```bash
-sed -i '' 's|github.com/mattermost/mattermost-plugin-starter-template|github.com/example/my-plugin|g' server/*.go
+# Clone repository
+git clone https://github.com/clearstargroup/cs-mattermost-spotify-plugin.git
+cd cs-mattermost-spotify-plugin
+
+# Build the plugin
+make dist
 ```
 
-4. Replace `.golangci.yml` `local-prefixes` attribute with your Go module path:
-```yml
-linters-settings:
-  # [...]
-  goimports:
-    local-prefixes: github.com/example/my-plugin
-```
+This produces `dist/com.clearstargroup.cs-mattermost-spotify-plugin.tar.gz`
 
-5. Build your plugin:
-```
-make
-```
+### Development
 
-This will produce a single plugin file (with support for multiple architectures) for upload to your Mattermost server:
+For development with hot-reloading:
 
-```
-dist/com.example.my-plugin.tar.gz
-```
-
-## Development
-
-To avoid having to manually install your plugin, build and deploy your plugin using one of the following options. In order for the below options to work, you must first enable plugin uploads via your config.json or API and restart Mattermost.
-
-```json
-    "PluginSettings" : {
-        ...
-        "EnableUploads" : true
-    }
-```
-
-### Development guidance
-
-1. Fewer packages is better: default to the main package unless there's good reason for a new package.
-
-2. Coupling implies same package: don't jump through hoops to break apart code that's naturally coupled.
-
-3. New package for a new interface: a classic example is the sqlstore with layers for monitoring performance, caching and mocking.
-
-4. New package for upstream integration: a discrete client package for interfacing with a 3rd party is often a great place to break out into a new package
-
-### Modifying the server boilerplate
-
-The server code comes with some boilerplate for creating an api, using slash commands, accessing the kvstore and using the cluster package for jobs.
-
-#### Api
-
-api.go implements the ServeHTTP hook which allows the plugin to implement the http.Handler interface. Requests destined for the `/plugins/{id}` path will be routed to the plugin. This file also contains a sample `HelloWorld` endpoint that is tested in plugin_test.go.
-
-#### Command package
-
-This package contains the boilerplate for adding a slash command and an instance of it is created in the `OnActivate` hook in plugin.go. If you don't need it you can delete the package and remove any reference to `commandClient` in plugin.go. The package also contains an example of how to create a mock for testing.
-
-#### KVStore package
-
-This is a central place for you to access the KVStore methods that are available in the `pluginapi.Client`. The package contains an interface for you to define your methods that will wrap the KVStore methods. An instance of the KVStore is created in the `OnActivate` hook.
-
-### Deploying with Local Mode
-
-If your Mattermost server is running locally, you can enable [local mode](https://docs.mattermost.com/administration/mmctl-cli-tool.html#local-mode) to streamline deploying your plugin. Edit your server configuration as follows:
-
-```json
-{
-    "ServiceSettings": {
-        ...
-        "EnableLocalMode": true,
-        "LocalModeSocketLocation": "/var/tmp/mattermost_local.socket"
-    },
-}
-```
-
-and then deploy your plugin:
-```
-make deploy
-```
-
-You may also customize the Unix socket path:
 ```bash
-export MM_LOCALSOCKETPATH=/var/tmp/alternate_local.socket
-make deploy
-```
-
-If developing a plugin with a webapp, watch for changes and deploy those automatically:
-```bash
+# Set environment variables
 export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
+export MM_ADMIN_TOKEN=your-admin-token
+
+# Build and deploy
+make deploy
+
+# Watch for changes
 make watch
 ```
 
-### Deploying with credentials
+## Configuration
 
-Alternatively, you can authenticate with the server's API with credentials:
+### 1. Create Spotify Application
+
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/applications)
+2. Create a new app
+3. Set redirect URI to:
+   ```
+   https://YOUR-MATTERMOST-URL/plugins/com.clearstargroup.cs-mattermost-spotify-plugin/callback
+   ```
+4. Save your **Client ID** and **Client Secret**
+5. Add e-mail address of all users to the App User Management tab to enable them to authenticate against the app if App status is Development Mode
+
+### 2. Configure Plugin
+
+1. Upload plugin bundle in **System Console** → **Plugins** → **Plugin Management**
+2. Under the plugin sessions, enter Client ID and Client Secret, and adjust cache duration if required
+3. Click **Save** and **Enable**
+
+## Usage
+
+### User Setup
+
+Users enable their personal integration:
+
 ```bash
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_USERNAME=admin
-export MM_ADMIN_PASSWORD=password
-make deploy
+/spotify enable your@spotify.email.com
+/spotify disable    # To disconnect
+/spotify refresh    # To clear status cache
 ```
 
-or with a [personal access token](https://docs.mattermost.com/developer/personal-access-tokens.html):
-```bash
-export MM_SERVICESETTINGS_SITEURL=http://localhost:8065
-export MM_ADMIN_TOKEN=j44acwd8obn78cdcx7koid4jkr
-make deploy
+Then complete Spotify authorization in the browser.
+
+### Status Display
+
+**Profile Popover:**
+- Shows "Spotify: Not connected" if not configured
+- Shows "Spotify: Not playing" when no active playback
+- Shows "Spotify: Playing [Type] - [Name]" with clickable link when active
+
+**Post Indicators:**
+- Green music icon (♫) appears next to usernames when actively playing
+- Updates every 15 seconds
+
+## Code Structure
+
+### Server (Go)
+
+```
+server/
+├── plugin.go           # Core plugin lifecycle
+├── api.go              # HTTP handlers for web frontend and OAuth
+├── configuration.go    # Plugin configuration
+├── command/
+|   ├── command.go      # Interface for slash command handler
+│   └── command_impl.go # Slash command handlers
+└── store/kvstore/
+    ├── kvstore.go      # Interface for data persistance layer
+    └── kvstore_impl.go # Data persistence layer
 ```
 
-### Releasing new versions
+**Key Components:**
+- `api.go`: OAuth callback handler and `/api/v1/status/{userId}` endpoint
+- `command/command_impl.go`: Implements `/spotify enable|disable|refresh` commands
+- `kvstore/`: Manages user tokens, email mappings, and status caching
 
-The version of a plugin is determined at compile time, automatically populating a `version` field in the [plugin manifest](plugin.json):
-* If the current commit matches a tag, the version will match after stripping any leading `v`, e.g. `1.3.1`.
-* Otherwise, the version will combine the nearest tag with `git rev-parse --short HEAD`, e.g. `1.3.1+d06e53e1`.
-* If there is no version tag, an empty version will be combined with the short hash, e.g. `0.0.0+76081421`.
+**API Endpoints:**
+- `POST /callback` - OAuth callback (public)
+- `GET /api/v1/status/{userId}` - Get cached/current Spotify status (authenticated)
 
-To disable this behaviour, manually populate and maintain the `version` field.
+### Webapp (TypeScript/React)
 
-## How to Release
-
-To trigger a release, follow these steps:
-
-1. **For Patch Release:** Run the following command:
-    ```
-    make patch
-    ```
-   This will release a patch change.
-
-2. **For Minor Release:** Run the following command:
-    ```
-    make minor
-    ```
-   This will release a minor change.
-
-3. **For Major Release:** Run the following command:
-    ```
-    make major
-    ```
-   This will release a major change.
-
-4. **For Patch Release Candidate (RC):** Run the following command:
-    ```
-    make patch-rc
-    ```
-   This will release a patch release candidate.
-
-5. **For Minor Release Candidate (RC):** Run the following command:
-    ```
-    make minor-rc
-    ```
-   This will release a minor release candidate.
-
-6. **For Major Release Candidate (RC):** Run the following command:
-    ```
-    make major-rc
-    ```
-   This will release a major release candidate.
-
-## Q&A
-
-### How do I make a server-only or web app-only plugin?
-
-Simply delete the `server` or `webapp` folders and remove the corresponding sections from `plugin.json`. The build scripts will skip the missing portions automatically.
-
-### How do I include assets in the plugin bundle?
-
-Place them into the `assets` directory. To use an asset at runtime, build the path to your asset and open as a regular file:
-
-```go
-bundlePath, err := p.API.GetBundlePath()
-if err != nil {
-    return errors.Wrap(err, "failed to get bundle path")
-}
-
-profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "profile_image.png"))
-if err != nil {
-    return errors.Wrap(err, "failed to read profile image")
-}
-
-if appErr := p.API.SetProfileImage(userID, profileImage); appErr != nil {
-    return errors.Wrap(err, "failed to set profile image")
-}
+```
+webapp/src/
+├── index.tsx              # Plugin initialization
+├── StatusComponent.tsx    # Profile popover component
+└── UserMusicIndicator.tsx # Username indicator component
 ```
 
-### How do I build the plugin with unminified JavaScript?
-Setting the `MM_DEBUG` environment variable will invoke the debug builds. The simplist way to do this is to simply include this variable in your calls to `make` (e.g. `make dist MM_DEBUG=1`).
+**Components:**
+- `StatusComponent.tsx`: Shows Spotify status in user profile popover
+- `UserMusicIndicator.tsx`: Adds music icons next to usernames in posts, watches DOM changes
+
+## Technical Details
+
+### OAuth Scopes
+
+- `user-read-playback-state` - Read current playback state
+- `user-read-email` - Associate with Mattermost user
+- `user-read-private` - User profile info
+
+### Status Caching
+
+The plugin implements a two-level caching system to minimize Spotify API calls and improve response times:
+
+**Status Caching:**
+- User playback status cached in KV store with (configurable) 15 minutes expiration
+- Cached status includes: connection state, playing state, playback type, URL, and context name
+- Automatically refreshed on next request when cache expires
+- Status can be manually cleared with `/spotify refresh` command
+
+**Context Name Caching:**
+- Context names (playlist, artist, album, podcast show) are cached separately to avoid repeated API calls
+- Supports all Spotify playback types: Artist, Playlist, Album, Show
+- When a user is listening to a playlist, artist page, album, or podcast episode, the plugin fetches and caches the relevant name
+- For inaccessible playlists, falls back to web scraping to extract the playlist name
+- Cache persists indefinitely to minimize API calls for frequently accessed content
+
+**KV store structure**:
+  - `token-{userId}` - OAuth token
+  - `status-{userId}` - Cached playback status
+  - `email-{email}` - Email to user ID mapping
+  - `context-{type}-{id}` - Context name cache (playlist/artist/album/show names)
+
+**Web Front End Caching:**
+The web front end also caches users statuses for 30 seconds to avoid repeated calls to the backend if profiles are viewed multiple times or usernames occur multiple times on a page.
+
+### Data Flow
+
+1. User enables plugin → registers email, gets OAuth URL
+2. OAuth callback → verifies email matches, stores token
+3. Status fetch → checks cache, fetches from Spotify API if needed
+4. Cache expires → automatically refreshed on next request
+5. Webapp → reads cached status from `/api/v1/status/{userId}`
