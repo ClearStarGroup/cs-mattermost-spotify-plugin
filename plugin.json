@@ -38,6 +38,14 @@
                 "help_text": "Client Secret from your Spotify Application",
                 "placeholder": "Enter your Spotify Client Secret",
                 "default": null
+            },
+            {
+                "key": "StatusCacheDurationMinutes",
+                "display_name": "Status Cache Duration (minutes)",
+                "type": "number",
+                "help_text": "The duration in minutes that a users listening status will be cached for",
+                "placeholder": "Enter the duration in minutes",
+                "default": 15
             }
         ]
     }
