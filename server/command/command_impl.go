@@ -27,6 +27,10 @@ func NewCommand(pluginAPI PluginAPI) (Command, error) {
 			Item:     "disable",
 			HelpText: "Disable Spotify integration",
 		},
+		{
+			Item:     "refresh",
+			HelpText: "Refresh status cache",
+		},
 	})
 
 	// Register command
@@ -62,7 +66,7 @@ func (c *Impl) executeSpotifyCommand(args *model.CommandArgs) (*model.CommandRes
 	if len(parts) < 2 {
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
-			Text:         "Only enable/disable commands are supported!\nUsage:\n  /spotify enable your@spotifyemail.com\n  /spotify disable",
+			Text:         "Usage:\n  /spotify enable your@spotifyemail.com\n  /spotify disable\n  /spotify refresh",
 		}, nil
 	}
 
@@ -109,10 +113,22 @@ func (c *Impl) executeSpotifyCommand(args *model.CommandArgs) (*model.CommandRes
 			Text:         "Disabled Spotify integration!",
 		}, nil
 
+	case "refresh":
+		if err := c.pluginAPI.ClearStatusCache(args.UserId); err != nil {
+			return &model.CommandResponse{
+				ResponseType: model.CommandResponseTypeEphemeral,
+				Text:         "Failed to refresh status cache: " + err.Error(),
+			}, nil
+		}
+		return &model.CommandResponse{
+			ResponseType: model.CommandResponseTypeEphemeral,
+			Text:         "Status cache cleared!",
+		}, nil
+
 	default:
 		return &model.CommandResponse{
 			ResponseType: model.CommandResponseTypeEphemeral,
-			Text:         "Only enable/disable commands are supported!\nUsage:\n  /spotify enable your@spotifyemail.com\n  /spotify disable",
+			Text:         "Usage:\n  /spotify enable your@spotifyemail.com\n  /spotify disable\n  /spotify refresh",
 		}, nil
 	}
 }

@@ -10,6 +10,7 @@ type PluginAPI interface {
 	GetSpotifyAuthURL() (string, error)
 	StoreUserEmail(userID, email string) error
 	ClearUserData(userID string) error
+	ClearStatusCache(userID string) error
 	LogInfo(message string, args ...any)
 }
 

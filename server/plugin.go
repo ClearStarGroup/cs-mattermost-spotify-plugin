@@ -99,6 +99,12 @@ func (p *Plugin) ClearUserData(userID string) error {
 	return p.kvstore.ClearUserData(userID)
 }
 
+// Command Plugin API - clears the status cache for a user
+func (p *Plugin) ClearStatusCache(userID string) error {
+	// Clear the cached status by storing nil
+	return p.kvstore.StoreCacheStatus(userID, nil)
+}
+
 // KVStore Plugin API - stores a value with optional expiration
 func (p *Plugin) KVSet(key string, value []byte, expirationSeconds ...int64) error {
 	if len(expirationSeconds) > 0 {
