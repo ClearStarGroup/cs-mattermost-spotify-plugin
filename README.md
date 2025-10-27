@@ -2,8 +2,6 @@
 
 A Mattermost plugin that integrates with Spotify to display users' currently playing music on their Mattermost profile. Originally forked from [reflog/mattermost-spotify](https://github.com/reflog/mattermost-spotify), this plugin has been completely rewritten on top of the [Mattermost plugin starter template](https://github.com/mattermost/mattermost-plugin-starter-template).
 
-[![Build Status](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/ci.yml/badge.svg)](https://github.com/mattermost/mattermost-plugin-starter-template/actions/workflows/e2e.yml)
-
 ## Overview
 
 This plugin enables Mattermost users to share their Spotify listening activity with their teammates. When a user has the plugin enabled and is playing music on Spotify, their current track information appears in their Mattermost profile popover and as a music icon next to their username in posts.
